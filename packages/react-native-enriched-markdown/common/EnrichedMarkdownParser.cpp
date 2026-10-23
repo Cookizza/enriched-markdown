@@ -35,22 +35,28 @@ EnrichedMarkdownParserCollectedBlocks
 EnrichedMarkdownParser::collect(jsi::Runtime &, std::string markdown, EnrichedMarkdownParserMd4cFlags flags, bool isGFM,
                                 EnrichedMarkdownParserStreamingOptions streaming) {
   auto &store = Markdown::DocumentStore::shared();
+  bool endsInsideOpenCodeFence = false;
   if (streaming.enabled) {
     Markdown::StreamingFilterOptions options;
     options.tableMode = Markdown::streamingBlockModeFromName(streaming.tableMode);
     options.codeBlockMode = Markdown::streamingBlockModeFromName(streaming.codeBlockMode);
     options.mediaMode = Markdown::streamingBlockModeFromName(streaming.mediaMode);
-    markdown = store.filter(markdown, options).markdown;
+    auto filtered = store.filter(markdown, options);
+    markdown = std::move(filtered.markdown);
+    endsInsideOpenCodeFence = filtered.endsInsideOpenCodeFence;
   }
   EnrichedMarkdownParserCollectedBlocks result;
   auto document = store.parse(markdown, toCoreFlags(flags), isGFM);
+  // An open fence is the document's last code block, a slot or not.
+  const Markdown::MarkdownASTNode *openCodeBlock = endsInsideOpenCodeFence ? document->blocks.lastCodeBlock : nullptr;
   for (const auto &slot : document->blocks.slots) {
-    // The hosts and the JS mapping read an unknown kind as an image, so code
-    // slots stay native until they can place them.
+    // useBlockSlots reads an unknown kind as an image, so code slots stay native
+    // until it maps them.
     if (slot.kind == Markdown::BlockSlotKind::Code)
       continue;
     result.slots.push_back({slot.id, Markdown::blockSlotKindName(slot.kind), slot.url, slot.altText, slot.title,
-                            Markdown::blockSlotPlacementName(slot.placement), slot.occurrenceId});
+                            Markdown::blockSlotPlacementName(slot.placement), slot.occurrenceId, slot.language,
+                            slot.code, openCodeBlock == nullptr || slot.node != openCodeBlock});
   }
   for (const auto &image : document->blocks.images) {
     result.images.push_back(
