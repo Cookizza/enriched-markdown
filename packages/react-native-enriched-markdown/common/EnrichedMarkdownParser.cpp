@@ -48,10 +48,6 @@ EnrichedMarkdownParser::collect(jsi::Runtime &, std::string markdown, EnrichedMa
   EnrichedMarkdownParserCollectedBlocks result;
   auto document = store.parse(markdown, toCoreFlags(flags), isGFM);
   for (const auto &slot : document->blocks.slots) {
-    // useBlockSlots reads an unknown kind as an image, so code slots stay native
-    // until it maps them.
-    if (slot.kind == Markdown::BlockSlotKind::Code)
-      continue;
     result.slots.push_back({slot.id, Markdown::blockSlotKindName(slot.kind), slot.url, slot.altText, slot.title,
                             Markdown::blockSlotPlacementName(slot.placement), slot.occurrenceId, slot.language,
                             slot.code, Markdown::isSlotComplete(document->blocks, slot, endsInsideOpenCodeFence)});
